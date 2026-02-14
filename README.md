@@ -59,3 +59,13 @@ World Objects: Static collision objects
 Attached Objects: Objects held by gripper
 
 Constraints: Joint/position constraints
+
+7.5 Perception Integration
+
+Object Detection and Pose Estimation :
+
+Method	                         |       Use Case	                |    Performance
+FoundationPose	                 |       Novel objects, accurate	|      ~1 FPS
+DOPE (Deep Object Pose Estimation)	|    Trained objects, faster	|      ~5 FPS
+RT-DETR	                            |    2D detection only	      |       Real-time
+Segment Anything	                  |    Segmentation masks	      |      ~10 FPS
