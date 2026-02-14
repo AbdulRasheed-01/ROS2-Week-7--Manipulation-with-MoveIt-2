@@ -22,16 +22,40 @@ By the end of this week, you will be able to:
 7.1 Core Components :
 
 
-Component	          |    Purpose	                 |     Key Features
+Component	          |    Purpose	                  |     Key Features
 
-MoveGroup Interface	|    Main user-facing API	     |     Plan, execute, add objects
+MoveGroup Interface	|    Main user-facing API	      |     Plan, execute, add objects
 
-Planning Pipeline	  |    Sequence of planners	     |     OMPL, Pilz, STOMP
+Planning Pipeline	  |    Sequence of planners	      |     OMPL, Pilz, STOMP
 
-Planning Scene	    |    World representation	     |     Collision objects, constraints
+Planning Scene	    |    World representation	      |     Collision objects, constraints
 
-Robot Model	        |    URDF/SRDF representation	 |     Kinematics, joints, links
+Robot Model	        |    URDF/SRDF representation	  |     Kinematics, joints, links
 
-Motion Planners	    |    Path planning algorithms	 |     RRT, PRM, LazyPRM
+Motion Planners	    |    Path planning algorithms	  |    RRT, PRM, LazyPRM
 
 Kinematics	        |    Forward/Inverse kinematics	|    KDL, TRAC-IK, BioIK
+
+Stage Types 
+
+Generators: Create independent solutions (IK sampling for grasp poses)
+
+Propagators: Extend from start/goal (Cartesian approach paths)
+
+Connectors: Bridge between states (free-space motion)
+
+Wrappers: Filter/modify solutions (constraint checking)
+
+Containers: Sequence or parallel stages
+
+7.2 Collision Checking and Planning Scene
+
+Planning Scene Layers:
+
+Robot Model: Self-collisions, joint limits
+
+World Objects: Static collision objects
+
+Attached Objects: Objects held by gripper
+
+Constraints: Joint/position constraints
