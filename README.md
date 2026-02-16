@@ -810,3 +810,231 @@ Create launch/gazebo_moveit.launch.py:
         constraints:
           stopped_velocity_tolerance: 0.01
           goal_time: 0.5
+Exercise 5: Perception-Guided Manipulation 
+
+5.1 Object Pose Estimation with DOPE:
+
+
+Install DOPE dependencies:
+    
+    # Install DOPE ROS 2 package
+    sudo apt-get install ros-humble-dope
+    sudo apt-get install ros-humble-dope-ros2
+    
+    # Or build from source
+    cd ~/ros2_ws/src
+    git clone https://github.com/NVIDIA-ISAAC-ROS/isaac_ros_dope.git
+    cd ~/ros2_ws
+    colcon build --packages-select isaac_ros_dope
+
+5.2 Perception Integration Node:
+
+Create robot_manipulation/perception/perception_servo.py:
+
+    #!/usr/bin/env python3
+    import rclpy
+    from rclpy.node import Node
+    from geometry_msgs.msg import Pose, PoseStamped
+    from visualization_msgs.msg import Marker, MarkerArray
+    from std_msgs.msg import Header
+    from sensor_msgs.msg import Image, CameraInfo
+    import tf2_ros
+    import tf2_geometry_msgs
+    import cv2
+    import numpy as np
+    from cv_bridge import CvBridge
+    
+    class PerceptionServoNode(Node):
+        def __init__(self):
+            super().__init__('perception_servo')
+            
+            # Subscribers
+            self.image_sub = self.create_subscription(
+                Image, '/camera/color/image_raw', self.image_callback, 10)
+            self.depth_sub = self.create_subscription(
+                Image, '/camera/aligned_depth_to_color/image_raw', self.depth_callback, 10)
+            self.camera_info_sub = self.create_subscription(
+                CameraInfo, '/camera/color/camera_info', self.camera_info_callback, 10)
+            
+            # Publishers
+            self.object_pose_pub = self.create_publisher(
+                PoseStamped, '/perception/object_pose', 10)
+            self.marker_pub = self.create_publisher(
+                MarkerArray, '/perception/visualization_markers', 10)
+            
+            # TF2
+            self.tf_buffer = tf2_ros.Buffer()
+            self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
+            
+            # CV Bridge
+            self.bridge = CvBridge()
+            
+            # Camera parameters
+            self.camera_matrix = None
+            self.distortion_coeffs = None
+            
+            # Detection parameters
+            self.lower_color = np.array([0, 100, 100])  # Red object
+            self.upper_color = np.array([10, 255, 255])
+            
+            self.get_logger().info("Perception Servo Node started")
+        
+        def camera_info_callback(self, msg):
+            """Store camera intrinsics"""
+            self.camera_matrix = np.array(msg.k).reshape(3, 3)
+            self.distortion_coeffs = np.array(msg.d)
+            self.get_logger().info("Camera info received")
+        
+        def image_callback(self, msg):
+            """Process RGB image for object detection"""
+            if self.camera_matrix is None:
+                return
+            
+            try:
+                # Convert ROS image to OpenCV
+                cv_image = self.bridge.imgmsg_to_cv2(msg, 'bgr8')
+                
+                # Detect object (simple color-based detection)
+                object_pose = self.detect_object(cv_image)
+                
+                if object_pose:
+                    # Transform pose to robot base frame
+                    transformed_pose = self.transform_to_base_frame(object_pose)
+                    
+                    if transformed_pose:
+                        # Publish pose
+                        pose_msg = PoseStamped()
+                        pose_msg.header.stamp = self.get_clock().now().to_msg()
+                        pose_msg.header.frame_id = 'base_link'
+                        pose_msg.pose = transformed_pose
+                        self.object_pose_pub.publish(pose_msg)
+                        
+                        # Visualize
+                        self.publish_markers(transformed_pose)
+                        
+                        self.get_logger().info(f"Object detected at: {transformed_pose.position.x:.2f}, {transformed_pose.position.y:.2f}, {transformed_pose.position.z:.2f}")
+                
+            except Exception as e:
+                self.get_logger().error(f"Image processing error: {e}")
+        
+        def depth_callback(self, msg):
+            """Store latest depth image"""
+            self.latest_depth = msg
+        
+        def detect_object(self, image):
+            """Simple color-based object detection"""
+            # Convert to HSV
+            hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+            
+            # Create mask
+            mask = cv2.inRange(hsv, self.lower_color, self.upper_color)
+            
+            # Find contours
+            contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            
+            if contours:
+                # Get largest contour
+                largest = max(contours, key=cv2.contourArea)
+                area = cv2.contourArea(largest)
+                
+                if area > 1000:  # Minimum area threshold
+                    # Get bounding box
+                    x, y, w, h = cv2.boundingRect(largest)
+                    center_x = x + w/2
+                    center_y = y + h/2
+                    
+                    # Get depth at center
+                    if hasattr(self, 'latest_depth'):
+                        depth_image = self.bridge.imgmsg_to_cv2(self.latest_depth, '16UC1')
+                        depth = depth_image[int(center_y), int(center_x)] / 1000.0  # Convert mm to m
+                        
+                        if 0.1 < depth < 2.0:  # Valid depth range
+                            # Convert pixel to 3D camera coordinates
+                            pose = self.pixel_to_3d(center_x, center_y, depth)
+                            return pose
+            
+            return None
+        
+        def pixel_to_3d(self, u, v, depth):
+            """Convert pixel coordinates to 3D point in camera frame"""
+            # Camera intrinsic parameters
+            fx = self.camera_matrix[0, 0]
+            fy = self.camera_matrix[1, 1]
+            cx = self.camera_matrix[0, 2]
+            cy = self.camera_matrix[1, 2]
+            
+            # Convert to 3D
+            x = (u - cx) * depth / fx
+            y = (v - cy) * depth / fy
+            z = depth
+            
+            pose = Pose()
+            pose.position.x = x
+            pose.position.y = y
+            pose.position.z = z
+            pose.orientation.w = 1.0
+            
+            return pose
+        
+        def transform_to_base_frame(self, camera_pose):
+            """Transform pose from camera frame to base_link"""
+            try:
+                # Look up transform
+                transform = self.tf_buffer.lookup_transform(
+                    'base_link',
+                    'camera_color_optical_frame',
+                    rclpy.time.Time()
+                )
+                
+                # Transform pose
+                pose_stamped = PoseStamped()
+                pose_stamped.header.frame_id = 'camera_color_optical_frame'
+                pose_stamped.pose = camera_pose
+                
+                transformed = tf2_geometry_msgs.do_transform_pose(pose_stamped, transform)
+                return transformed.pose
+                
+            except Exception as e:
+                self.get_logger().warn(f"Transform failed: {e}")
+                return None
+        
+        def publish_markers(self, pose):
+            """Publish visualization markers"""
+            marker_array = MarkerArray()
+            
+            # Sphere marker for object
+            sphere_marker = Marker()
+            sphere_marker.header.frame_id = 'base_link'
+            sphere_marker.header.stamp = self.get_clock().now().to_msg()
+            sphere_marker.ns = 'object'
+            sphere_marker.id = 0
+            sphere_marker.type = Marker.SPHERE
+            sphere_marker.action = Marker.ADD
+            
+            sphere_marker.pose = pose
+            sphere_marker.scale.x = 0.05
+            sphere_marker.scale.y = 0.05
+            sphere_marker.scale.z = 0.05
+            sphere_marker.color.r = 1.0
+            sphere_marker.color.g = 0.0
+            sphere_marker.color.b = 0.0
+            sphere_marker.color.a = 0.8
+            
+            marker_array.markers.append(sphere_marker)
+            
+            self.marker_pub.publish(marker_array)
+    
+    def main(args=None):
+        rclpy.init(args=args)
+        node = PerceptionServoNode()
+        
+        try:
+            rclpy.spin(node)
+        except KeyboardInterrupt:
+            pass
+        
+        node.destroy_node()
+        rclpy.shutdown()
+    
+    if __name__ == '__main__':
+        main()
