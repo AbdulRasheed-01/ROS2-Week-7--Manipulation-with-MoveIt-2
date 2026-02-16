@@ -214,3 +214,98 @@ Click Execute to animate
       planner_id: RRTConnectkConfigDefault"
 
 Exercise 2: Python Interface with PyMoveIt2 
+
+2.1 Basic MoveIt 2 Python Node:
+
+Create robot_manipulation/moveit/basic_move.py:
+
+    #!/usr/bin/env python3
+    import rclpy
+    from rclpy.node import Node
+    from pymoveit2 import MoveIt2
+    from pymoveit2.robots import panda
+    import time
+    
+    class BasicManipulation(Node):
+        def __init__(self):
+            super().__init__('basic_manipulation')
+            
+            # Create MoveIt 2 interface
+            self.moveit2 = MoveIt2(
+                node=self,
+                joint_names=panda.joint_names(),
+                base_link_name=panda.base_link_name(),
+                end_effector_name=panda.end_effector_name(),
+                group_name=panda.MOVE_GROUP_ARM
+            )
+            
+            self.get_logger().info("Basic Manipulation Node Started")
+        
+        def move_to_joint_pose(self, joint_positions):
+            """Move to specified joint positions"""
+            self.get_logger().info(f"Moving to joint positions: {joint_positions}")
+            
+            # Plan and execute
+            self.moveit2.move_to_configuration(joint_positions)
+            self.moveit2.wait_until_executed()
+            
+            self.get_logger().info("Movement completed")
+        
+        def move_to_pose(self, position, quaternion):
+            """Move to Cartesian pose"""
+            self.get_logger().info(f"Moving to pose: pos={position}, quat={quaternion}")
+            
+            # Plan and execute
+            self.moveit2.move_to_pose(
+                position=position,
+                quaternion=quaternion,
+                cartesian_path=False  # Use joint space planning
+            )
+            self.moveit2.wait_until_executed()
+            
+            self.get_logger().info("Movement completed")
+        
+        def open_gripper(self):
+            """Open the gripper"""
+            self.get_logger().info("Opening gripper")
+            self.moveit2.move_to_configuration(panda.OPEN_GRIPPER)
+            self.moveit2.wait_until_executed()
+        
+        def close_gripper(self):
+            """Close the gripper"""
+            self.get_logger().info("Closing gripper")
+            self.moveit2.move_to_configuration(panda.CLOSE_GRIPPER)
+            self.moveit2.wait_until_executed()
+    
+    def main(args=None):
+        rclpy.init(args=args)
+        node = BasicManipulation()
+        
+        # Wait for MoveIt 2 to initialize
+        time.sleep(2.0)
+        
+        # Example: Move to home position
+        node.move_to_joint_pose(panda.HOME_JOINTS)
+        time.sleep(1.0)
+        
+        # Example: Move to Cartesian pose
+        node.move_to_pose(
+            position=[0.5, 0.1, 0.5],
+            quaternion=[0.0, 0.0, 0.0, 1.0]
+        )
+        time.sleep(1.0)
+        
+        # Example: Open/close gripper
+        node.open_gripper()
+        time.sleep(1.0)
+        node.close_gripper()
+        
+        # Spin to keep node alive
+        rclpy.spin(node)
+        
+        node.destroy_node()
+        rclpy.shutdown()
+    
+    if __name__ == '__main__':
+        main()
+
