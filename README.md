@@ -116,3 +116,25 @@ Step 1: Install MoveIt 2 and Dependencies
     sudo apt-get install ros-humble-tf2-tools
     sudo apt-get install ros-humble-ros2-control ros-humble-ros2-controllers
     sudo apt-get install ros-humble-control-toolbox
+
+Step 2: Install Robot Drivers and Simulation
+
+    # Install Universal Robots driver (for UR robots) [citation:3][citation:10]
+    sudo apt-get install ros-humble-ur
+    sudo apt-get install ros-humble-ur-robot-driver
+    sudo apt-get install ros-humble-ur-calibration
+    sudo apt-get install ros-humble-joint-trajectory-controller
+
+    # Or build from source for latest version
+    cd ~/ros2_ws/src
+    git clone -b humble https://github.com/UniversalRobots/Universal_Robots_ROS2_Driver.git
+    git clone -b humble https://github.com/UniversalRobots/Universal_Robots_ROS2_Gazebo_Simulation.git
+    git clone -b ros2 https://github.com/ros-industrial/universal_robot.git
+
+    # Install Gazebo simulation packages
+    sudo apt-get install ros-humble-gazebo-ros-pkgs
+    sudo apt-get install ros-humble-gazebo-ros2-control
+
+    # Install Panda robot resources
+    sudo apt-get install ros-humble-moveit-resources-panda-moveit-config
+    sudo apt-get install ros-humble-franka-description
