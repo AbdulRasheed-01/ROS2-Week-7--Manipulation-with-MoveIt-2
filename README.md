@@ -60,12 +60,59 @@ Attached Objects: Objects held by gripper
 
 Constraints: Joint/position constraints
 
+
 7.5 Perception Integration
 
 Object Detection and Pose Estimation :
 
 Method	                         |       Use Case	                |    Performance
+
 FoundationPose	                 |       Novel objects, accurate	|      ~1 FPS
+
 DOPE (Deep Object Pose Estimation)	|    Trained objects, faster	|      ~5 FPS
+
 RT-DETR	                            |    2D detection only	      |       Real-time
+
 Segment Anything	                  |    Segmentation masks	      |      ~10 FPS
+
+⚙️ Setup and Installation
+
+Step 1: Install MoveIt 2 and Dependencies
+
+    # Install MoveIt 2 core packages
+    sudo apt-get install ros-humble-moveit
+    sudo apt-get install ros-humble-moveit-resources  
+    sudo apt-get install ros-humble-moveit-visual-tools
+    sudo apt-get install ros-humble-moveit-servo
+    sudo apt-get install ros-humble-geometric-shapes
+
+    # Install planners
+    sudo apt-get install ros-humble-moveit-planners-ompl
+    sudo apt-get install ros-humble-pilz-industrial-motion-planner
+    sudo apt-get install ros-humble-moveit-planners-chomp
+
+    # Install kinematics
+    sudo apt-get install ros-humble-moveit-kinematics
+    sudo apt-get install ros-humble-trac-ik-kinematics-plugin
+
+    # Install MoveIt Task Constructor
+    sudo apt-get install ros-humble-moveit-task-constructor-core
+    sudo apt-get install ros-humble-moveit-task-constructor-demos
+    sudo apt-get install ros-humble-moveit-task-constructor-capabilities
+    sudo apt-get install ros-humble-moveit-task-constructor-visualization
+
+    # Install PyMoveIt2 (Python bindings) [citation:3]
+    pip3 install pymoveit2
+
+    # Or build from source
+    cd ~/ros2_ws/src
+    git clone https://github.com/AndrejOrsula/pymoveit2.git
+    cd ~/ros2_ws
+    colcon build --packages-select pymoveit2
+
+    # Install additional tools
+    sudo apt-get install ros-humble-joint-state-publisher-gui
+    sudo apt-get install ros-humble-xacro
+    sudo apt-get install ros-humble-tf2-tools
+    sudo apt-get install ros-humble-ros2-control ros-humble-ros2-controllers
+    sudo apt-get install ros-humble-control-toolbox
