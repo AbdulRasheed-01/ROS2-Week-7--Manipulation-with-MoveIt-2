@@ -138,3 +138,34 @@ Step 2: Install Robot Drivers and Simulation
     # Install Panda robot resources
     sudo apt-get install ros-humble-moveit-resources-panda-moveit-config
     sudo apt-get install ros-humble-franka-description
+
+Step 3: Create Manipulation Package
+
+    cd ~/ros2_ws/src
+    ros2 pkg create robot_manipulation --build-type ament_python \
+        --dependencies rclpy rclcpp moveit_msgs moveit_ros_planning_interface \
+                     moveit_visual_tools moveit_task_constructor_core \
+                     geometric_shapes tf2_ros geometry_msgs \
+        --description "Week 7: Robotic Manipulation with MoveIt 2"
+    
+    cd robot_manipulation
+    mkdir -p robot_manipulation/{moveit,perception,controllers,pick_place}
+    mkdir -p {config,launch,urdf,meshes,scenes,behaviors}
+    mkdir -p config/{moveit_params,srdf,kinematics}
+    mkdir -p scenes/{pick_place,assembly}
+
+🔧 Practical Exercises
+
+Exercise 1: First Steps with MoveIt 2 and Panda Robot
+
+1.1 Launch Panda Robot in RViz with MoveIt 2 
+
+    # Terminal 1: Launch Panda with MoveIt 2
+    ros2 launch moveit_resources_panda_moveit_config demo.launch.py
+    
+    # Alternative with custom RViz config
+    ros2 launch moveit_resources_panda_moveit_config demo.launch.py \
+        rviz_config:=/opt/ros/humble/share/moveit_resources_panda_moveit_config/config/moveit.rviz
+    
+1.2 Basic Motion Planning with GUI:
+
