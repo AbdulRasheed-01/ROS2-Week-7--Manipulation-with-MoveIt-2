@@ -695,3 +695,84 @@ Create src/mtc_pick_place_node.cpp:
     endif()
     
     ament_package()
+
+Exercise 4: Integration with Gazebo Simulation 
+
+4.1 Launch UR Robot in Gazebo with MoveIt:
+
+    # Terminal 1: Launch UR10e in Gazebo
+    ros2 launch ur_simulation_gz ur_sim_control.launch.py ur_type:=ur10e
+    
+    # Terminal 2: Launch MoveIt with Gazebo integration
+    ros2 launch ur_simulation_gz ur_sim_moveit.launch.py ur_type:=ur10e
+    
+    # Alternative: Panda in Gazebo with MoveIt
+    ros2 launch panda_moveit_config gazebo.launch.py
+4.2 Custom MoveIt + Gazebo Launch File:
+
+Create launch/gazebo_moveit.launch.py:
+
+    from launch import LaunchDescription
+    from launch.actions import IncludeLaunchDescription, TimerAction
+    from launch.launch_description_sources import PythonLaunchDescriptionSource
+    from launch_ros.actions import Node
+    from launch_ros.substitutions import FindPackageShare
+    
+    def generate_launch_description():
+        return LaunchDescription([
+            # Start Gazebo with robot
+            IncludeLaunchDescription(
+                PythonLaunchDescriptionSource([
+                    FindPackageShare('gazebo_simulation'),
+                    '/launch/spawn_robot.launch.py'
+                ]),
+                launch_arguments={
+                    'world': 'empty.sdf',
+                    'use_sim_time': 'True'
+                }.items()
+            ),
+            
+            # Start robot state publisher
+            TimerAction(
+                period=5.0,
+                actions=[
+                    Node(
+                        package='robot_state_publisher',
+                        executable='robot_state_publisher',
+                        name='robot_state_publisher',
+                        parameters=[{'use_sim_time': True,
+                                     'robot_description': '$(find robot_manipulation)/urdf/manipulator.urdf'}]
+                    )
+                ]
+            ),
+            
+            # Start MoveIt 2
+            TimerAction(
+                period=8.0,
+                actions=[
+                    IncludeLaunchDescription(
+                        PythonLaunchDescriptionSource([
+                            FindPackageShare('robot_manipulation'),
+                            '/launch/moveit_planning.launch.py'
+                        ]),
+                        launch_arguments={
+                            'use_sim_time': 'True'
+                        }.items()
+                    )
+                ]
+            ),
+            
+            # Start RViz with MoveIt plugins
+            TimerAction(
+                period=12.0,
+                actions=[
+                    Node(
+                        package='rviz2',
+                        executable='rviz2',
+                        name='rviz2',
+                        arguments=['-d', '$(find robot_manipulation)/config/moveit_planning.rviz'],
+                        parameters=[{'use_sim_time': True}]
+                    )
+                ]
+            )
+        ])
