@@ -415,5 +415,28 @@ Create robot_manipulation/moveit/safe_move.py:
     
     if __name__ == '__main__':
         main()
+Exercise 3: MoveIt Task Constructor for Pick and Place 
 
+3.1 Install MTC Demos and Dependencies:
+
+    # Install MTC demos
+    sudo apt-get install ros-humble-moveit-task-constructor-demos
     
+    # Clone MTC source for tutorials
+    cd ~/ros2_ws/src
+    git clone -b humble https://github.com/moveit/moveit_task_constructor.git
+    cd ~/ros2_ws
+    rosdep install --from-paths . --ignore-src -y
+    colcon build --packages-select moveit_task_constructor_core moveit_task_constructor_demo
+        
+3.2 Run MTC Pick and Place Demo:
+
+    # Terminal 1: Launch Panda environment
+    ros2 launch moveit_task_constructor_demo demo.launch.py
+    
+    # Terminal 2: Run pick and place demo
+    ros2 launch moveit_task_constructor_demo run.launch.py exe:=pick_place_demo
+3.3 Custom MTC Node in C++:
+
+Create src/mtc_pick_place_node.cpp:
+
