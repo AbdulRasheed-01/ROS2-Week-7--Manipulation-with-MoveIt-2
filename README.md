@@ -308,4 +308,112 @@ Create robot_manipulation/moveit/basic_move.py:
     
     if __name__ == '__main__':
         main()
+2.2 Safe Movement with Workspace Constraints 
 
+Create robot_manipulation/moveit/safe_move.py:
+
+    #!/usr/bin/env python3
+    import rclpy
+    from rclpy.node import Node
+    from pymoveit2 import MoveIt2
+    from pymoveit2.robots import panda
+    import numpy as np
+    
+    class SafeManipulation(Node):
+        def __init__(self):
+            super().__init__('safe_manipulation')
+            
+            self.moveit2 = MoveIt2(
+                node=self,
+                joint_names=panda.joint_names(),
+                base_link_name=panda.base_link_name(),
+                end_effector_name=panda.end_effector_name(),
+                group_name=panda.MOVE_GROUP_ARM
+            )
+            
+            # Workspace boundaries (example values for Panda) [citation:3]
+            self.workspace_limits = {
+                'x': {'min': 0.15, 'max': 0.68},
+                'y': {'min': -0.41, 'max': 0.41},
+                'z': {'min': 0.10, 'max': 0.60}
+            }
+        
+        def is_pose_safe(self, position):
+            """Check if target position is within workspace"""
+            x, y, z = position
+            
+            if not (self.workspace_limits['x']['min'] <= x <= self.workspace_limits['x']['max']):
+                self.get_logger().error(f"UNSAFE: X={x:.3f} outside range")
+                return False
+            
+            if not (self.workspace_limits['y']['min'] <= y <= self.workspace_limits['y']['max']):
+                self.get_logger().error(f"UNSAFE: Y={y:.3f} outside range")
+                return False
+            
+            if not (self.workspace_limits['z']['min'] <= z <= self.workspace_limits['z']['max']):
+                self.get_logger().error(f"UNSAFE: Z={z:.3f} outside range")
+                return False
+            
+            self.get_logger().info(f"SAFE: Position {position} within bounds")
+            return True
+        
+        def safe_move_to_pose(self, position, quaternion):
+            """Move only if target is safe"""
+            if not self.is_pose_safe(position):
+                self.get_logger().error("Movement aborted - target unsafe")
+                return False
+            
+            self.get_logger().info(f"Moving to safe pose: {position}")
+            self.moveit2.move_to_pose(position, quaternion)
+            self.moveit2.wait_until_executed()
+            return True
+        
+        def add_collision_box(self, name, position, size):
+            """Add collision object to planning scene"""
+            self.get_logger().info(f"Adding collision box: {name}")
+            
+            # Use MoveIt 2 collision object interface
+            self.moveit2.add_collision_box(
+                name=name,
+                position=position,
+                quaternion=[0.0, 0.0, 0.0, 1.0],
+                size=size,
+                frame_id=panda.base_link_name()
+            )
+        
+        def remove_collision_object(self, name):
+            """Remove collision object from planning scene"""
+            self.get_logger().info(f"Removing collision object: {name}")
+            self.moveit2.remove_collision_object(name)
+    
+    def main(args=None):
+        rclpy.init(args=args)
+        node = SafeManipulation()
+        
+        # Add a table to the planning scene
+        node.add_collision_box(
+            name="table",
+            position=[0.4, 0.0, -0.1],
+            size=[0.8, 0.8, 0.2]
+        )
+        
+        # Try safe movement
+        node.safe_move_to_pose(
+            position=[0.5, 0.2, 0.3],
+            quaternion=[0.0, 0.0, 0.0, 1.0]
+        )
+        
+        # This should fail (outside workspace)
+        node.safe_move_to_pose(
+            position=[1.0, 0.5, 0.8],
+            quaternion=[0.0, 0.0, 0.0, 1.0]
+        )
+        
+        rclpy.spin(node)
+        node.destroy_node()
+        rclpy.shutdown()
+    
+    if __name__ == '__main__':
+        main()
+
+    
