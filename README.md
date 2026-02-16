@@ -178,3 +178,39 @@ Use interactive markers to set goal pose
 Click Plan to visualize path
 
 Click Execute to animate
+
+1.3 Command-Line Planning:
+
+    # List available planning groups
+    ros2 param get /move_group robot_description_planning
+    
+    # Send planning goal via action
+    ros2 action send_goal /plan_kinematic_path moveit_msgs/action/GetMotionPlan "
+    motion_plan_request:
+      workspace_parameters:
+        header:
+          frame_id: panda_link0
+        min_corner: [-1, -1, -1]
+        max_corner: [1, 1, 1]
+      start_state:
+        is_diff: true
+      goal_constraints:
+        - joint_constraints:
+            - joint_name: panda_joint1
+              position: 0.0
+            - joint_name: panda_joint2
+              position: -0.3
+            - joint_name: panda_joint3
+              position: 0.0
+            - joint_name: panda_joint4
+              position: -2.0
+            - joint_name: panda_joint5
+              position: 0.0
+            - joint_name: panda_joint6
+              position: 2.0
+            - joint_name: panda_joint7
+              position: 0.8
+      pipeline_id: ompl
+      planner_id: RRTConnectkConfigDefault"
+
+Exercise 2: Python Interface with PyMoveIt2 
