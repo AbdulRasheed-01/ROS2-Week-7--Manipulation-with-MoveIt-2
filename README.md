@@ -1038,3 +1038,90 @@ Create robot_manipulation/perception/perception_servo.py:
     
     if __name__ == '__main__':
         main()
+
+Exercise 6: Real Robot Integration 
+6.1 UR Robot Setup 
+
+    # Install UR robot driver
+    sudo apt-get install ros-humble-ur
+    sudo apt-get install ros-humble-ur-robot-driver
+    
+    # Launch real UR robot
+    ros2 launch ur_robot_driver ur_control.launch.py \
+        ur_type:=ur5e \
+        robot_ip:=192.168.1.100 \
+        launch_rviz:=true
+    
+    # Launch MoveIt with real robot
+    ros2 launch ur_moveit_config ur_moveit.launch.py \
+        ur_type:=ur5e \
+        robot_ip:=192.168.1.100 \
+        use_fake_hardware:=false \
+        launch_rviz:=true
+
+6.2 Safety Configuration 
+
+    Create config/safety_config.yaml:
+    
+    # Safety limits for real robot operation
+    safety_limits:
+      ros__parameters:
+        # Velocity limits
+        max_velocity_scaling_factor: 0.3  # 30% of max speed
+        max_acceleration_scaling_factor: 0.3
+        
+        # Joint limits (radians)
+        joint_limits:
+          shoulder_pan_joint:
+            has_velocity_limits: true
+            max_velocity: 0.5
+            has_acceleration_limits: true
+            max_acceleration: 1.0
+          
+          shoulder_lift_joint:
+            has_velocity_limits: true
+            max_velocity: 0.5
+            has_acceleration_limits: true
+            max_acceleration: 1.0
+          
+          elbow_joint:
+            has_velocity_limits: true
+            max_velocity: 0.5
+            has_acceleration_limits: true
+            max_acceleration: 1.0
+          
+          wrist_1_joint:
+            has_velocity_limits: true
+            max_velocity: 0.8
+            has_acceleration_limits: true
+            max_acceleration: 1.5
+          
+          wrist_2_joint:
+            has_velocity_limits: true
+            max_velocity: 0.8
+            has_acceleration_limits: true
+            max_acceleration: 1.5
+          
+          wrist_3_joint:
+            has_velocity_limits: true
+            max_velocity: 0.8
+            has_acceleration_limits: true
+            max_acceleration: 1.5
+6.3 Robot Communication Parameters :
+
+Parameter	|            Description	    |            Default
+
+robot_ip	|            Robot IP address	|            Required
+
+script_command_port	 |   URScript commands	|            50004
+
+reverse_port	|        Cyclic instructions |	         50001
+
+script_sender_port	|    External control URScript	|    50002
+
+trajectory_port	|        Trajectory control	    |        50003 
+
+use_fake_hardware	 |   Simulation mode	|            false
+
+fake_sensor_commands |	 Simulate sensors	|            false
+
