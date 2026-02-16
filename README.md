@@ -1125,3 +1125,103 @@ use_fake_hardware	 |   Simulation mode	|            false
 
 fake_sensor_commands |	 Simulate sensors	|            false
 
+
+🔍 Troubleshooting
+
+Issue 1: Planning Fails Frequently
+
+    # Increase planning time
+    ros2 param set /move_group planning_time 10.0
+    
+    # Try different planner
+    ros2 param set /move_group planner_id "RRTConnectkConfigDefault"
+    
+    # Check for collision objects
+    ros2 topic echo /planning_scene
+Issue 2: Robot Doesn't Execute Plans
+
+    # Check controller is loaded
+    ros2 control list_controllers
+    
+    # Verify joint trajectory controller
+    ros2 controller info joint_trajectory_controller
+    
+    # Check topic connections
+    ros2 topic info /follow_joint_trajectory/_action/status
+
+Issue 3: Perception Not Working
+
+    # Verify camera topics
+    ros2 topic list | grep camera
+    
+    # Check camera info
+    ros2 topic echo /camera/color/camera_info --once
+    
+    # Test with static image
+    ros2 run image_view image_view image:=/camera/color/image_raw
+Issue 4: Real Robot Communication 
+
+    # Test connection to robot
+    ping <robot_ip>
+    
+    # Check UR dashboard
+    ros2 service call /dashboard_client/program_state ur_dashboard_msgs/srv/GetProgramState
+    
+    # Verify external control program is running on teach pendant
+
+📚 Additional Resources
+
+Official Documentation
+
+MoveIt 2 Documentation
+
+MoveIt Task Constructor
+
+PyMoveIt2
+
+Universal Robots ROS2 Driver 
+
+Advanced Topics
+Optimization-Based Planning: TrajOpt, CHOMP
+
+Deep Learning for Grasping: Grasp pose detection
+
+Mobile Manipulation: Combined navigation + manipulation
+
+Dual-Arm Coordination: Multi-arm systems
+
+Useful Commands
+
+    # MoveIt diagnostics
+    ros2 run moveit_ros_visualization moveit_visualization
+    
+    # Check planning scene
+    ros2 run moveit_commander moveit_commander_cmdline.py
+    
+    # List planning groups
+    ros2 param get /move_group robot_description_planning
+    
+    # Test kinematics
+    ros2 run moveit_kinematics test_kinematics --ik-group panda_arm
+    
+    # Visualize collision objects
+    ros2 run rviz2 rviz2 -d $(ros2 pkg prefix moveit_resources_panda_moveit_config)/share/moveit_resources_panda_moveit_config/config/moveit.rviz
+
+
+🎉 Congratulations!
+You've completed Week 7! You now know how to:
+
+✅ Setup and configure MoveIt 2 for robotic arms
+
+✅ Plan and execute complex motions
+
+✅ Use MoveIt Task Constructor for pick and place 
+
+✅ Integrate perception for object detection 
+
+✅ Handle collision avoidance and safety 
+
+✅ Deploy on real robots with ros2_control 
+
+Next Week: Week 8 - Advanced Topics and Deployment! You'll learn about micro-ROS, Docker containers, performance optimization, and production-grade robot systems.
+
