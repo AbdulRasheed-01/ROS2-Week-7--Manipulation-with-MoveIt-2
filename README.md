@@ -169,3 +169,12 @@ Exercise 1: First Steps with MoveIt 2 and Panda Robot
     
 1.2 Basic Motion Planning with GUI:
 
+Once RViz launches:
+
+Set Planning Group to panda_arm or hand
+
+Use interactive markers to set goal pose
+
+Click Plan to visualize path
+
+Click Execute to animate
