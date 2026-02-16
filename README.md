@@ -440,3 +440,258 @@ Exercise 3: MoveIt Task Constructor for Pick and Place
 
 Create src/mtc_pick_place_node.cpp:
 
+    #include <rclcpp/rclcpp.hpp>
+    #include <moveit/planning_scene/planning_scene.hpp>
+    #include <moveit/planning_scene_interface/planning_scene_interface.hpp>
+    #include <moveit/task_constructor/task.h>
+    #include <moveit/task_constructor/solvers.h>
+    #include <moveit/task_constructor/stages.h>
+    #include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
+    #include <tf2_eigen/tf2_eigen.hpp>
+    
+    static const rclcpp::Logger LOGGER = rclcpp::get_logger("mtc_pick_place");
+    namespace mtc = moveit::task_constructor;
+    
+    class MTCPickPlaceNode
+    {
+    public:
+      MTCPickPlaceNode(const rclcpp::NodeOptions& options);
+      
+      rclcpp::node_interfaces::NodeBaseInterface::SharedPtr getNodeBaseInterface();
+      
+      void setupPlanningScene();
+      void doTask();
+      mtc::Task createTask();
+    
+    private:
+      rclcpp::Node::SharedPtr node_;
+      mtc::Task task_;
+    };
+    
+    MTCPickPlaceNode::MTCPickPlaceNode(const rclcpp::NodeOptions& options)
+      : node_{ std::make_shared<rclcpp::Node>("mtc_node", options) }
+    {
+    }
+    
+    rclcpp::node_interfaces::NodeBaseInterface::SharedPtr MTCPickPlaceNode::getNodeBaseInterface()
+    {
+      return node_->get_node_base_interface();
+    }
+    
+    void MTCPickPlaceNode::setupPlanningScene()
+    {
+      // Add a cylinder object to pick
+      moveit_msgs::msg::CollisionObject object;
+      object.id = "cylinder";
+      object.header.frame_id = "world";
+      object.primitives.resize(1);
+      object.primitives[0].type = shape_msgs::msg::SolidPrimitive::CYLINDER;
+      object.primitives[0].dimensions = { 0.1, 0.02 };  // height, radius
+    
+      geometry_msgs::msg::Pose pose;
+      pose.position.x = 0.4;
+      pose.position.y = 0.0;
+      pose.position.z = 0.1;
+      pose.orientation.w = 1.0;
+      object.pose = pose;
+    
+      moveit::planning_interface::PlanningSceneInterface psi;
+      psi.applyCollisionObject(object);
+      
+      RCLCPP_INFO(LOGGER, "Added cylinder to planning scene at (0.4, 0.0, 0.1)");
+    }
+    
+    void MTCPickPlaceNode::doTask()
+    {
+      task_ = createTask();
+      
+      try
+      {
+        task_.init();
+      }
+      catch (mtc::InitStageException& e)
+      {
+        RCLCPP_ERROR_STREAM(LOGGER, e);
+        return;
+      }
+      
+      if (!task_.plan(5))
+      {
+        RCLCPP_ERROR_STREAM(LOGGER, "Task planning failed");
+        return;
+      }
+      
+      // Publish solution for visualization
+      task_.introspection().publishSolution(*task_.solutions().front());
+      
+      RCLCPP_INFO(LOGGER, "Task planning succeeded, executing...");
+      
+      auto result = task_.execute(*task_.solutions().front());
+      if (result.val != moveit_msgs::msg::MoveItErrorCodes::SUCCESS)
+      {
+        RCLCPP_ERROR_STREAM(LOGGER, "Task execution failed");
+        return;
+      }
+      
+      RCLCPP_INFO(LOGGER, "Task execution succeeded!");
+    }
+    
+    mtc::Task MTCPickPlaceNode::createTask()
+    {
+      mtc::Task task;
+      task.stages()->setName("pick place task");
+      task.loadRobotModel(node_);
+      
+      const auto& arm_group = "panda_arm";
+      const auto& hand_group = "hand";
+      const auto& hand_frame = "panda_hand";
+      
+      // Set task properties
+      task.setProperty("group", arm_group);
+      task.setProperty("eef", hand_group);
+      task.setProperty("ik_frame", hand_frame);
+      
+      // Create solvers
+      auto sampling_planner = std::make_shared<mtc::solvers::PipelinePlanner>(node_);
+      sampling_planner->setProperty("goal_joint_tolerance", 1e-5);
+      
+      auto cartesian_planner = std::make_shared<mtc::solvers::CartesianPath>();
+      cartesian_planner->setMaxVelocityScalingFactor(0.5);
+      cartesian_planner->setMaxAccelerationScalingFactor(0.5);
+      cartesian_planner->setStepSize(0.005);
+      
+      // Stage 1: Current state
+      auto stage_current = std::make_unique<mtc::stages::CurrentState>("current");
+      task.add(std::move(stage_current));
+      
+      // Stage 2: Open hand
+      auto stage_open_hand = std::make_unique<mtc::stages::MoveTo>("open hand", sampling_planner);
+      stage_open_hand->setGroup(hand_group);
+      stage_open_hand->setGoal("open");
+      task.add(std::move(stage_open_hand));
+      
+      // Stage 3: Move to pick approach position
+      auto stage_move_to_pick = std::make_unique<mtc::stages::Connect>(
+          "move to pick",
+          mtc::stages::Connect::GroupPlannerVector({ { arm_group, sampling_planner } }));
+      stage_move_to_pick->setTimeout(5.0);
+      task.add(std::move(stage_move_to_pick));
+      
+      // Stage 4: Approach object
+      auto stage_approach_object = std::make_unique<mtc::stages::MoveRelative>(
+          "approach object", cartesian_planner);
+      stage_approach_object->setGroup(arm_group);
+      stage_approach_object->setIKFrame(hand_frame);
+      stage_approach_object->setMinMaxDistance(0.1, 0.15);
+      
+      geometry_msgs::msg::Vector3Stamped approach_direction;
+      approach_direction.header.frame_id = "world";
+      approach_direction.vector.z = -1.0;  // Move down
+      stage_approach_object->setDirection(approach_direction);
+      task.add(std::move(stage_approach_object));
+      
+      // Stage 5: Generate grasp pose
+      auto stage_grasp = std::make_unique<mtc::stages::GenerateGraspPose>("generate grasp");
+      stage_grasp->setAngle(M_PI / 6);
+      stage_grasp->setPreGraspPose("open");
+      stage_grasp->setGraspPose("closed");
+      stage_grasp->setMonitoredStage(task.stages()->back());  // use approach as reference
+      
+      // Stage 6: Attach object
+      auto stage_attach = std::make_unique<mtc::stages::ModifyPlanningScene>("attach object");
+      stage_attach->attachObject("cylinder", hand_frame);
+      task.add(std::move(stage_attach));
+      
+      // Stage 7: Lift object
+      auto stage_lift = std::make_unique<mtc::stages::MoveRelative>("lift object", cartesian_planner);
+      stage_lift->setGroup(arm_group);
+      stage_lift->setIKFrame(hand_frame);
+      stage_lift->setMinMaxDistance(0.1, 0.3);
+      
+      geometry_msgs::msg::Vector3Stamped lift_direction;
+      lift_direction.header.frame_id = "world";
+      lift_direction.vector.z = 1.0;  // Move up
+      stage_lift->setDirection(lift_direction);
+      task.add(std::move(stage_lift));
+      
+      return task;
+    }
+    
+    int main(int argc, char** argv)
+    {
+      rclcpp::init(argc, argv);
+      
+      rclcpp::NodeOptions options;
+      options.automatically_declare_parameters_from_overrides(true);
+      
+      auto mtc_node = std::make_unique<MTCPickPlaceNode>(options);
+      
+      // Setup planning scene with object
+      mtc_node->setupPlanningScene();
+      
+      // Execute pick and place task
+      mtc_node->doTask();
+      
+      rclcpp::shutdown();
+      return 0;
+    }
+
+3.4 CMakeLists.txt for MTC Node:
+
+    cmake_minimum_required(VERSION 3.8)
+    project(mtc_tutorial)
+    
+    if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+      add_compile_options(-Wall -Wextra -Wpedantic)
+    endif()
+    
+    # find dependencies
+    find_package(ament_cmake REQUIRED)
+    find_package(rclcpp REQUIRED)
+    find_package(rclcpp_action REQUIRED)
+    find_package(moveit_ros_planning_interface REQUIRED)
+    find_package(moveit_task_constructor_core REQUIRED)
+    find_package(moveit_visual_tools REQUIRED)
+    find_package(geometric_shapes REQUIRED)
+    find_package(tf2 REQUIRED)
+    find_package(tf2_eigen REQUIRED)
+    find_package(tf2_geometry_msgs REQUIRED)
+    
+    # Create library for MTC utilities (optional)
+    add_library(mtc_utils SHARED src/mtc_utils.cpp)
+    target_include_directories(mtc_utils PUBLIC
+      $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+      $<INSTALL_INTERFACE:include>
+    )
+    target_link_libraries(mtc_utils PUBLIC
+      rclcpp::rclcpp
+      moveit_task_constructor_core::moveit_task_constructor_core
+    )
+    
+    # Main executable
+    add_executable(mtc_pick_place src/mtc_pick_place_node.cpp)
+    target_link_libraries(mtc_pick_place PUBLIC
+      rclcpp::rclcpp
+      moveit_task_constructor_core::moveit_task_constructor_core
+      moveit_ros_planning_interface::moveit_ros_planning_interface
+      ${tf2_eigen_LIBRARIES}
+    )
+    
+    ament_target_dependencies(mtc_pick_place
+      rclcpp
+      moveit_task_constructor_core
+      tf2
+      tf2_eigen
+      tf2_geometry_msgs
+    )
+    
+    install(TARGETS mtc_pick_place mtc_utils
+      DESTINATION lib/${PROJECT_NAME}
+    )
+    
+    if(BUILD_TESTING)
+      find_package(ament_lint_auto REQUIRED)
+      ament_lint_auto_find_test_dependencies()
+    endif()
+    
+    ament_package()
